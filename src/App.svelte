@@ -10,42 +10,46 @@
 
   let viewMode = "grid";
 
-  // Filtering: if searchTags exist, each tag must appear in the student's full name or email.
+  // Filtering logic.
   $: filteredRoster = $roster.filter((student) => {
     let passes = true;
-    if ($filters.searchTags && $filters.searchTags.length > 0) {
+    // Free-text search: check name or email.
+    if ($filters.search && $filters.search.trim() !== "") {
+      const searchLower = $filters.search.toLowerCase();
       const fullName = (
         (student.First || "") +
         " " +
         (student.Last || "")
       ).toLowerCase();
       const email = (student.EmailAddress || "").toLowerCase();
-      for (const tag of $filters.searchTags) {
-        const tagLower = tag.toLowerCase();
-        if (!fullName.includes(tagLower) && !email.includes(tagLower)) {
-          passes = false;
-          break;
-        }
+      if (!fullName.includes(searchLower) && !email.includes(searchLower)) {
+        passes = false;
       }
     }
-    if ($filters.hasGitHub === true && !student.githubUsername) passes = false;
-    if ($filters.hasGitHub === false && student.githubUsername) passes = false;
-    if ($filters.hasSlack === true && !student.slackUserId) passes = false;
-    if ($filters.hasSlack === false && student.slackUserId) passes = false;
-    if ($filters.major) {
+    // GitHub toggle.
+    if ($filters.hasGitHub === "yes" && !student.githubUsername) passes = false;
+    if ($filters.hasGitHub === "no" && student.githubUsername) passes = false;
+    // Slack toggle.
+    if ($filters.hasSlack === "yes" && !student.slackUserId) passes = false;
+    if ($filters.hasSlack === "no" && student.slackUserId) passes = false;
+    // Major dropdown.
+    if ($filters.major && $filters.major !== "all") {
+      const majorLower = $filters.major.toLowerCase();
       const studentMajor = (
         student["Primary Major Title"] ||
         student["Primary Major"] ||
         ""
       ).toLowerCase();
-      if (!studentMajor.includes($filters.major.toLowerCase())) passes = false;
+      if (!studentMajor.includes(majorLower)) passes = false;
     }
-    if ($filters.classification) {
+    // Classification dropdown.
+    if ($filters.classification && $filters.classification !== "all") {
       if (
         (student.Classification || "").toLowerCase() !==
         $filters.classification.toLowerCase()
-      )
+      ) {
         passes = false;
+      }
     }
     return passes;
   });
@@ -61,11 +65,29 @@
       roster.set([]);
     }
   }
+
+  async function copyEmails() {
+    const emails = filteredRoster
+      .map((student) => student.EmailAddress)
+      .filter((email) => email && email.trim() !== "");
+    try {
+      await navigator.clipboard.writeText(emails.join(", "));
+      alert(`Copied ${emails.length} emails to clipboard.`);
+    } catch (err) {
+      alert("Failed to copy emails: " + err);
+    }
+  }
 </script>
 
 <div>
-  <div class="status-bar">
-    {filteredRoster.length} record{filteredRoster.length === 1 ? "" : "s"} displayed.
+  <div class="top-bar">
+    <div>
+      {filteredRoster.length} record{filteredRoster.length === 1 ? "" : "s"} displayed
+    </div>
+    <div>
+      <button on:click={copyEmails}>Copy Emails</button>
+      <button on:click={clearRecords}>Clear All Records</button>
+    </div>
   </div>
 
   <UploadButtons />
@@ -78,7 +100,6 @@
     <button on:click={() => setView("list")} class:active={viewMode === "list"}
       >List View</button
     >
-    <button on:click={clearRecords} class="clear-btn">Clear All Records</button>
   </div>
 
   {#if filteredRoster.length === 0}
@@ -93,6 +114,25 @@
 </div>
 
 <style>
+  .top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+  .top-bar button {
+    padding: 0.5rem 1rem;
+    margin: 0.25rem;
+    border: none;
+    background: #007acc;
+    color: white;
+    cursor: pointer;
+    border-radius: 4px;
+  }
+  .top-bar button:hover {
+    background: #005ea2;
+  }
   .view-switcher {
     margin: 1rem 0;
     text-align: center;
@@ -105,20 +145,9 @@
     color: white;
     cursor: pointer;
     border-radius: 4px;
-    transition: background 0.2s;
   }
   .view-switcher button.active,
   .view-switcher button:hover {
     background: #005ea2;
-  }
-  .status-bar {
-    text-align: center;
-    font-size: 0.9rem;
-    color: #333;
-    margin-bottom: 1rem;
-  }
-  .clear-btn {
-    margin-top: 0.5rem;
-    background: #e74c3c;
   }
 </style>

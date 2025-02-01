@@ -4,16 +4,19 @@ import { set, get as idbGet } from 'idb-keyval';
 // Main roster store.
 export const roster = writable([]);
 
-// Filters store – note that "search" is now an array.
+// Filters store with defaults.
+// • search: a free-text string.
+// • hasGitHub and hasSlack: "all", "yes", or "no".
+// • major and classification: default to "all".
 export const filters = writable({
-  search: [],
-  hasGitHub: null,
-  hasSlack: null,
-  major: '',
-  classification: ''
+  search: "",
+  hasGitHub: "all",
+  hasSlack: "all",
+  major: "all",
+  classification: "all"
 });
 
-// Key for persistence.
+// Key used for persistence.
 const ROSTER_KEY = 'student-dashboard-roster';
 
 export async function loadRosterFromDB() {

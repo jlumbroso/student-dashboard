@@ -2,18 +2,17 @@
   import { filters, roster } from "../lib/store.js";
   import { derived } from "svelte/store";
 
-  // Compute distinct major values from the roster.
+  // Compute distinct major values.
   const distinctMajors = derived(roster, ($roster) => {
     const majors = new Set();
     $roster.forEach((student) => {
-      // Try the "Primary Major Title" first, then "Primary Major"
       const major = student["Primary Major Title"] || student["Primary Major"];
       if (major) majors.add(major);
     });
     return Array.from(majors).sort();
   });
 
-  // Compute distinct classification values from the roster.
+  // Compute distinct classification values.
   const distinctClassifications = derived(roster, ($roster) => {
     const classes = new Set();
     $roster.forEach((student) => {
@@ -23,146 +22,160 @@
     return Array.from(classes).sort();
   });
 
-  // Event handlers for the text inputs.
-  function onSearch(e) {
-    filters.update((f) => ({ ...f, search: e.target.value }));
-  }
-
-  function onGitHubFilter(e) {
-    const val = e.target.value;
-    let boolVal = null;
-    if (val === "yes") boolVal = true;
-    if (val === "no") boolVal = false;
-    filters.update((f) => ({ ...f, hasGitHub: boolVal }));
-  }
-
-  function onSlackFilter(e) {
-    const val = e.target.value;
-    let boolVal = null;
-    if (val === "yes") boolVal = true;
-    if (val === "no") boolVal = false;
-    filters.update((f) => ({ ...f, hasSlack: boolVal }));
-  }
-
-  function onMajorFilter(e) {
-    filters.update((f) => ({ ...f, major: e.target.value }));
-  }
-
-  function onClassificationFilter(e) {
-    filters.update((f) => ({ ...f, classification: e.target.value }));
-  }
-
-  // When a tag is clicked, update the corresponding filter.
-  function selectMajor(tag) {
-    filters.update((f) => ({ ...f, major: tag }));
-  }
-
-  function selectClassification(tag) {
-    filters.update((f) => ({ ...f, classification: tag }));
+  // Helper to update a filter.
+  function updateFilter(key, value) {
+    filters.update((f) => ({ ...f, [key]: value }));
   }
 </script>
 
 <div class="filter-bar">
-  <!-- Standard text input filters -->
-  <div class="filter-row">
-    <label for="search">Search:</label>
+  <!-- Free-text Search -->
+  <div class="filter-item">
+    <label for="searchInput">Search:</label>
     <input
-      id="search"
+      id="searchInput"
       type="text"
       placeholder="Name or Email"
-      on:input={onSearch}
+      on:input={(e) => updateFilter("search", e.target.value)}
     />
   </div>
-  <div class="filter-row">
-    <label for="githubFilter">GitHub:</label>
-    <select id="githubFilter" on:change={onGitHubFilter}>
+
+  <!-- GitHub Toggle using fieldset -->
+  <fieldset class="filter-item">
+    <legend>GitHub:</legend>
+    <div class="toggle-group">
+      <button
+        type="button"
+        class:active={$filters.hasGitHub === "all"}
+        on:click={() => updateFilter("hasGitHub", "all")}
+      >
+        All
+      </button>
+      <button
+        type="button"
+        class:active={$filters.hasGitHub === "yes"}
+        on:click={() => updateFilter("hasGitHub", "yes")}
+      >
+        Yes
+      </button>
+      <button
+        type="button"
+        class:active={$filters.hasGitHub === "no"}
+        on:click={() => updateFilter("hasGitHub", "no")}
+      >
+        No
+      </button>
+    </div>
+  </fieldset>
+
+  <!-- Slack Toggle using fieldset -->
+  <fieldset class="filter-item">
+    <legend>Slack:</legend>
+    <div class="toggle-group">
+      <button
+        type="button"
+        class:active={$filters.hasSlack === "all"}
+        on:click={() => updateFilter("hasSlack", "all")}
+      >
+        All
+      </button>
+      <button
+        type="button"
+        class:active={$filters.hasSlack === "yes"}
+        on:click={() => updateFilter("hasSlack", "yes")}
+      >
+        Yes
+      </button>
+      <button
+        type="button"
+        class:active={$filters.hasSlack === "no"}
+        on:click={() => updateFilter("hasSlack", "no")}
+      >
+        No
+      </button>
+    </div>
+  </fieldset>
+
+  <!-- Major Dropdown -->
+  <div class="filter-item">
+    <label for="majorSelect">Major:</label>
+    <select
+      id="majorSelect"
+      on:change={(e) => updateFilter("major", e.target.value)}
+    >
       <option value="all">All</option>
-      <option value="yes">Has GitHub</option>
-      <option value="no">No GitHub</option>
-    </select>
-  </div>
-  <div class="filter-row">
-    <label for="slackFilter">Slack:</label>
-    <select id="slackFilter" on:change={onSlackFilter}>
-      <option value="all">All</option>
-      <option value="yes">Has Slack</option>
-      <option value="no">No Slack</option>
+      {#each $distinctMajors as major}
+        <option value={major}>{major}</option>
+      {/each}
     </select>
   </div>
 
-  <!-- Major filter text input plus clickable tags -->
-  <div class="filter-row">
-    <label for="majorFilter">Major:</label>
-    <input
-      id="majorFilter"
-      type="text"
-      placeholder="e.g. Computer Science"
-      on:input={onMajorFilter}
-    />
-  </div>
-  <div class="tags">
-    <span style="font-weight:bold;">Popular Majors:</span>
-    {#each $distinctMajors as major}
-      <span class="tag" on:click={() => selectMajor(major)}>{major}</span>
-    {/each}
-  </div>
-
-  <!-- Classification filter text input plus clickable tags -->
-  <div class="filter-row">
-    <label for="classificationFilter">Classification:</label>
-    <input
-      id="classificationFilter"
-      type="text"
-      placeholder="e.g. SR, JR"
-      on:input={onClassificationFilter}
-    />
-  </div>
-  <div class="tags">
-    <span style="font-weight:bold;">Popular Classifications:</span>
-    {#each $distinctClassifications as cl}
-      <span class="tag" on:click={() => selectClassification(cl)}>{cl}</span>
-    {/each}
+  <!-- Classification Dropdown -->
+  <div class="filter-item">
+    <label for="classSelect">Classification:</label>
+    <select
+      id="classSelect"
+      on:change={(e) => updateFilter("classification", e.target.value)}
+    >
+      <option value="all">All</option>
+      {#each $distinctClassifications as cl}
+        <option value={cl}>{cl}</option>
+      {/each}
+    </select>
   </div>
 </div>
 
 <style>
   .filter-bar {
     display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    margin-bottom: 1rem;
-  }
-  .filter-row {
-    display: flex;
-    gap: 1rem;
     flex-wrap: wrap;
     align-items: center;
+    gap: 1rem;
+    padding: 0.5rem;
+    background: #f8f8f8;
+    border: 1px solid #ddd;
+    border-radius: 4px;
   }
-  label {
-    margin-right: 0.5rem;
+  .filter-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .filter-item label,
+  fieldset legend {
     font-weight: bold;
   }
-  input,
+  input[type="text"],
   select {
-    padding: 0.25rem 0.5rem;
+    padding: 0.3rem;
     border: 1px solid #ccc;
     border-radius: 4px;
   }
-  .tags {
-    margin-top: 0.5rem;
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-  }
-  .tag {
-    background: #007acc;
-    color: white;
-    padding: 0.25rem 0.5rem;
+  /* Styles for toggle groups using fieldset */
+  fieldset {
+    border: 1px solid #ccc;
     border-radius: 4px;
+    padding: 0.3rem 0.5rem;
+    margin: 0;
+    display: inline-flex;
+    align-items: center;
+  }
+  fieldset legend {
+    margin-right: 0.5rem;
+    padding: 0 0.3rem;
+  }
+  .toggle-group button {
+    border: none;
+    background: #fff;
+    padding: 0.3rem 0.8rem;
     cursor: pointer;
     font-size: 0.9rem;
   }
-  .tag:hover {
-    background: #005ea2;
+  .toggle-group button.active {
+    background: #007acc;
+    color: #fff;
+  }
+  .toggle-group button:focus {
+    outline: 2px solid #005ea2;
   }
 </style>
