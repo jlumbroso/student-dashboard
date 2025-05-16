@@ -90,34 +90,61 @@
     log.debug("Parsed Slack CSV:", parsed);
     const rows = parsed.data;
     const slackMap = {};
+    
+    // Track statistics for logging
+    let rowCount = 0;
+    let skippedRows = 0;
+    
     for (const row of rows) {
-      if (!row.email) continue;
+      if (!row.email) {
+        skippedRows++;
+        continue;
+      }
+      
+      rowCount++;
       const email = row.email.trim().toLowerCase();
+      
+      // Save ALL identifiers from the CSV
+      const username = row.username ? row.username.trim() : null;
       const userId = row.userid ? row.userid.trim() : null;
       const fullname = row.fullname ? row.fullname.trim() : null;
       const displayname = row.displayname ? row.displayname.trim() : null;
-      slackMap[email] = { userId, fullname, displayname };
+      const status = row.status ? row.status.trim() : null;
+      
+      slackMap[email] = { username, userId, fullname, displayname, status };
+      log.debug(`Processing Slack user: email=${email}, username=${username}, fullname=${fullname}, displayname=${displayname}`);
     }
+    
+    log.debug(`Processed ${rowCount} Slack users (skipped ${skippedRows} rows without email)`);
     log.debug("Built Slack map:", slackMap);
+    
+    let matchedCount = 0;
+    
     roster.update((currentRoster) => {
       return currentRoster.map((student) => {
         const stuEmail = student.EmailAddress
           ? student.EmailAddress.toLowerCase()
           : "";
         const match = slackMap[stuEmail];
+        
         if (match) {
+          matchedCount++;
+          log.debug(`Matched student ${student.First} ${student.Last} with Slack user: ${match.username || "<no username>"}`);
+          
           return {
             ...student,
+            slackUsername: match.username, // Store the actual username field from CSV
             slackUserId: match.userId,
             slackFullname: match.fullname,
             slackDisplayname: match.displayname,
-            slackUsername: match.displayname || match.fullname, // Store slack username for message matching
+            slackStatus: match.status
           };
         }
         return student;
       });
     });
-    confirmationMessage = "Slack CSV processed.";
+    
+    confirmationMessage = `Slack CSV processed: matched ${matchedCount} students with Slack data.`;
     loadingMessage = "";
   }
 
@@ -131,31 +158,94 @@
       const text = await file.text();
       const messages = JSON.parse(text);
       log.debug("Parsed message data:", messages);
-      log.debug("Found", messages.length, "messages in JSON.");
+      log.debug(`Found ${messages.length} messages in JSON file ${file.name}`);
       
       const fileName = file.name;
       let matchCount = 0;
       let studentUpdates = 0;
+      let unmatchedUsernames = new Set();
       
       // Get the current roster
       const currentRoster = get(roster);
       
       // Create a map of Slack usernames to student indices for faster lookup
       const usernameMap = {};
+      let slackUsernameCount = 0;
+      
+      // Count students with different identifiers for logging
+      let studentsWithUsername = 0;
+      let studentsWithDisplayname = 0;
+      let studentsWithFullname = 0;
+      
       currentRoster.forEach((student, index) => {
-        // Match by slackUsername, slackDisplayname, or any other slack identifier
+        // Primary match: use the actual username field from Slack CSV
         if (student.slackUsername) {
           usernameMap[student.slackUsername.toLowerCase()] = index;
+          slackUsernameCount++;
+          studentsWithUsername++;
+          log.debug(`Student ${student.First} ${student.Last} has Slack username: ${student.slackUsername}`);
         }
+        
+        // Secondary matches
         if (student.slackDisplayname) {
           usernameMap[student.slackDisplayname.toLowerCase()] = index;
+          studentsWithDisplayname++;
         }
+        
         if (student.slackFullname) {
           usernameMap[student.slackFullname.toLowerCase()] = index;
+          studentsWithFullname++;
         }
       });
       
-      // Update the roster with messages
+      log.debug(`Roster stats: ${slackUsernameCount}/${currentRoster.length} students have Slack usernames`);
+      log.debug(`Identity types: username=${studentsWithUsername}, displayname=${studentsWithDisplayname}, fullname=${studentsWithFullname}`);
+      
+      // Message username counts for debugging
+      const messageUsernames = new Set();
+      messages.forEach(msg => {
+        if (msg.username) messageUsernames.add(msg.username.toLowerCase());
+      });
+      log.debug(`Found ${messageUsernames.size} unique usernames in message data`);
+      
+      // Collect all usernames from messages for debugging
+      const messageUsernamesList = Array.from(messageUsernames);
+      log.debug(`Message usernames (first 10): ${messageUsernamesList.slice(0, 10).join(', ')}`);
+      
+      // Create a map to collect messages by student ID
+      const messagesByStudent = new Map();
+      
+      // Process each message and try to match to a student
+      messages.forEach(msg => {
+        if (!msg.username) return;
+        
+        const username = msg.username.toLowerCase();
+        const studentIndex = usernameMap[username];
+        
+        if (studentIndex !== undefined) {
+          const student = currentRoster[studentIndex];
+          if (student && student.studentId) {
+            // Add message to the student's collection
+            if (!messagesByStudent.has(student.studentId)) {
+              messagesByStudent.set(student.studentId, []);
+              studentUpdates++;
+            }
+            
+            messagesByStudent.get(student.studentId).push({
+              timestamp: msg.timestamp,
+              source: fileName,
+              text: msg.text
+            });
+            
+            matchCount++;
+            log.debug(`Matched message from '${username}' to student ${student.First} ${student.Last}`);
+          }
+        } else {
+          unmatchedUsernames.add(username);
+        }
+      });
+      
+      // Update the roster with the collected messages
       roster.update(currentRoster => {
         return currentRoster.map(student => {
           // Initialize messages array if it doesn't exist
@@ -163,25 +253,9 @@
             student.messages = [];
           }
           
-          // Find messages for this student
-          const studentMessages = messages.filter(msg => {
-            const username = msg.username ? msg.username.toLowerCase() : '';
-            return usernameMap[username] !== undefined && 
-                  currentRoster[usernameMap[username]] && 
-                  (currentRoster[usernameMap[username]].studentId === student.studentId);
-          });
-          
-          if (studentMessages.length > 0) {
-            matchCount += studentMessages.length;
-            studentUpdates++;
-            
-            // Add each message with proper structure
-            const newMessages = studentMessages.map(msg => ({
-              timestamp: msg.timestamp,
-              source: fileName,
-              text: msg.text
-            }));
-            
+          // If this student has matched messages, add them
+          if (student.studentId && messagesByStudent.has(student.studentId)) {
+            const newMessages = messagesByStudent.get(student.studentId);
             return {
               ...student,
               messages: [...student.messages, ...newMessages]
@@ -192,7 +266,10 @@
         });
       });
       
-      confirmationMessage = `Messages processed: matched ${matchCount} messages to ${studentUpdates} students.`;
+      // Log unmatched usernames for debugging
+      log.debug(`Unmatched usernames (${unmatchedUsernames.size}): ${Array.from(unmatchedUsernames).slice(0, 10).join(', ')}...`);
+      
+      confirmationMessage = `Messages processed: matched ${matchCount} messages to ${studentUpdates} students. ${unmatchedUsernames.size} usernames couldn't be matched.`;
     } catch (err) {
       log.error("Error processing message JSON:", err);
       confirmationMessage = `Error processing message JSON: ${err.message}`;
