@@ -17,7 +17,7 @@ A Svelte + Vite application that merges data from three sources:
    - **Search Tags:** An autocomplete tag–input (suggesting names/emails from the roster)
 - **View Modes:** Toggle between a grid view (with a hover overlay) and a list view.
 - **UI Feedback:** Displays a loading indicator while files are processed and shows confirmation messages.
-- **Record Management:** A button to clear all records and a display of the number of records currently shown.
+- **Record Management:** A button to clear all records, export data (as JSON or CSV), and a display of the number of records currently shown.
 - **Tasteful Styling:** Responsive, modern design.
 - **Logging:** Uses [loglevel](https://github.com/pimterry/loglevel) for debug-friendly logging.
 

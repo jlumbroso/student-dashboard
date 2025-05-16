@@ -77,6 +77,64 @@
       alert("Failed to copy emails: " + err);
     }
   }
+
+  function exportData(format) {
+    if (filteredRoster.length === 0) {
+      alert("No data to export.");
+      return;
+    }
+
+    let content, filename, type;
+
+    if (format === 'json') {
+      content = JSON.stringify(filteredRoster, null, 2);
+      filename = 'student-data.json';
+      type = 'application/json';
+    } else if (format === 'csv') {
+      // Get all unique keys across all student objects
+      const keys = new Set();
+      filteredRoster.forEach(student => {
+        Object.keys(student).forEach(key => keys.add(key));
+      });
+      const headers = Array.from(keys);
+      
+      // Create CSV content
+      const csvRows = [headers.join(',')];
+      
+      filteredRoster.forEach(student => {
+        const row = headers.map(header => {
+          const value = student[header] || '';
+          // Handle values that contain commas, quotes, etc.
+          return typeof value === 'string' ? `"${value.replace(/"/g, '""')}"` : value;
+        });
+        csvRows.push(row.join(','));
+      });
+      
+      content = csvRows.join('\n');
+      filename = 'student-data.csv';
+      type = 'text/csv';
+    } else {
+      alert('Unsupported export format');
+      return;
+    }
+
+    // Create a downloadable blob
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    
+    // Create a temporary link and trigger download
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    
+    // Clean up
+    setTimeout(() => {
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }, 100);
+  }
 </script>
 
 <div>
@@ -86,6 +144,13 @@
     </div>
     <div>
       <button on:click={copyEmails}>Copy Emails</button>
+      <div class="export-dropdown">
+        <button class="export-btn">Export Data</button>
+        <div class="export-content">
+          <button on:click={() => exportData('json')}>JSON</button>
+          <button on:click={() => exportData('csv')}>CSV</button>
+        </div>
+      </div>
       <button on:click={clearRecords}>Clear All Records</button>
     </div>
   </div>
@@ -132,6 +197,35 @@
   }
   .top-bar button:hover {
     background: #005ea2;
+  }
+  .export-dropdown {
+    position: relative;
+    display: inline-block;
+  }
+  .export-content {
+    display: none;
+    position: absolute;
+    background-color: #f9f9f9;
+    min-width: 120px;
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+    z-index: 1;
+    border-radius: 4px;
+  }
+  .export-content button {
+    color: black;
+    background: white;
+    padding: 12px 16px;
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: none;
+  }
+  .export-content button:hover {
+    background-color: #f1f1f1;
+    color: #005ea2;
+  }
+  .export-dropdown:hover .export-content {
+    display: block;
   }
   .view-switcher {
     margin: 1rem 0;
