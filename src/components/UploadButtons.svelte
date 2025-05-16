@@ -2,6 +2,7 @@
   import log from "loglevel";
   import Papa from "papaparse";
   import { roster } from "../lib/store.js";
+  import { get } from 'svelte/store';
 
   log.setLevel("debug");
 
@@ -110,6 +111,7 @@
             slackUserId: match.userId,
             slackFullname: match.fullname,
             slackDisplayname: match.displayname,
+            slackUsername: match.displayname || match.fullname, // Store slack username for message matching
           };
         }
         return student;
@@ -117,6 +119,86 @@
     });
     confirmationMessage = "Slack CSV processed.";
     loadingMessage = "";
+  }
+
+  // Process Message JSON files
+  async function handleMessageJson(file) {
+    loadingMessage = "Loading message JSON...";
+    log.debug("Processing message JSON file:", file);
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const messages = JSON.parse(text);
+      log.debug("Parsed message data:", messages);
+      log.debug("Found", messages.length, "messages in JSON.");
+      
+      const fileName = file.name;
+      let matchCount = 0;
+      let studentUpdates = 0;
+      
+      // Get the current roster
+      const currentRoster = get(roster);
+      
+      // Create a map of Slack usernames to student indices for faster lookup
+      const usernameMap = {};
+      currentRoster.forEach((student, index) => {
+        // Match by slackUsername, slackDisplayname, or any other slack identifier
+        if (student.slackUsername) {
+          usernameMap[student.slackUsername.toLowerCase()] = index;
+        }
+        if (student.slackDisplayname) {
+          usernameMap[student.slackDisplayname.toLowerCase()] = index;
+        }
+        if (student.slackFullname) {
+          usernameMap[student.slackFullname.toLowerCase()] = index;
+        }
+      });
+      
+      // Update the roster with messages
+      roster.update(currentRoster => {
+        return currentRoster.map(student => {
+          // Initialize messages array if it doesn't exist
+          if (!student.messages) {
+            student.messages = [];
+          }
+          
+          // Find messages for this student
+          const studentMessages = messages.filter(msg => {
+            const username = msg.username ? msg.username.toLowerCase() : '';
+            return usernameMap[username] !== undefined && 
+                  currentRoster[usernameMap[username]] && 
+                  (currentRoster[usernameMap[username]].studentId === student.studentId);
+          });
+          
+          if (studentMessages.length > 0) {
+            matchCount += studentMessages.length;
+            studentUpdates++;
+            
+            // Add each message with proper structure
+            const newMessages = studentMessages.map(msg => ({
+              timestamp: msg.timestamp,
+              source: fileName,
+              text: msg.text
+            }));
+            
+            return {
+              ...student,
+              messages: [...student.messages, ...newMessages]
+            };
+          }
+          
+          return student;
+        });
+      });
+      
+      confirmationMessage = `Messages processed: matched ${matchCount} messages to ${studentUpdates} students.`;
+    } catch (err) {
+      log.error("Error processing message JSON:", err);
+      confirmationMessage = `Error processing message JSON: ${err.message}`;
+    } finally {
+      loadingMessage = "";
+    }
   }
 
   function onClasslistChange(event) {
@@ -139,6 +221,13 @@
     handleSlackCsv(file);
     event.target.value = "";
   }
+
+  function onMessagesChange(event) {
+    const file = event.target.files[0];
+    log.info("File selected for Message JSON:", file);
+    handleMessageJson(file);
+    event.target.value = "";
+  }
 </script>
 
 <div class="upload-section">
@@ -159,6 +248,10 @@
   <div>
     <label for="slack">Slack CSV:</label>
     <input id="slack" type="file" accept=".csv" on:change={onSlackChange} />
+  </div>
+  <div>
+    <label for="messages">Message JSON:</label>
+    <input id="messages" type="file" accept=".json" on:change={onMessagesChange} />
   </div>
 
   {#if loadingMessage}

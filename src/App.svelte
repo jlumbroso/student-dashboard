@@ -87,15 +87,34 @@
     let content, filename, type;
 
     if (format === 'json') {
-      content = JSON.stringify(filteredRoster, null, 2);
+      // Create a deep copy of the data to avoid modifying the actual state
+      const exportData = JSON.parse(JSON.stringify(filteredRoster));
+      
+      // Make sure the message data is properly included
+      exportData.forEach(student => {
+        if (!student.messages) {
+          student.messages = [];
+        }
+      });
+      
+      content = JSON.stringify(exportData, null, 2);
       filename = 'student-data.json';
       type = 'application/json';
     } else if (format === 'csv') {
-      // Get all unique keys across all student objects
+      // Get all unique keys across all student objects (excluding messages array)
       const keys = new Set();
       filteredRoster.forEach(student => {
-        Object.keys(student).forEach(key => keys.add(key));
+        Object.keys(student).forEach(key => {
+          // Skip the messages array for CSV as it's nested data
+          if (key !== 'messages') {
+            keys.add(key);
+          }
+        });
       });
+      
+      // Add a column to indicate if the student has messages
+      keys.add('hasMessages');
+      
       const headers = Array.from(keys);
       
       // Create CSV content
@@ -103,8 +122,24 @@
       
       filteredRoster.forEach(student => {
         const row = headers.map(header => {
+          if (header === 'hasMessages') {
+            // Add a boolean indicating if the student has messages
+            return student.messages && student.messages.length > 0 ? 'true' : 'false';
+          }
+          
           const value = student[header] || '';
-          // Handle values that contain commas, quotes, etc.
+          
+          // Handle nested objects (except arrays)
+          if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+            return `"${JSON.stringify(value).replace(/"/g, '""')}"`;  
+          }
+          
+          // Handle arrays (just count them)
+          if (Array.isArray(value)) {
+            return value.length;
+          }
+          
+          // Handle strings with commas, quotes, etc.
           return typeof value === 'string' ? `"${value.replace(/"/g, '""')}"` : value;
         });
         csvRows.push(row.join(','));
@@ -113,6 +148,21 @@
       content = csvRows.join('\n');
       filename = 'student-data.csv';
       type = 'text/csv';
+    } else if (format === 'messages-only') {
+      // Export just the messages data
+      const messagesData = {};
+      
+      filteredRoster.forEach(student => {
+        if (student.messages && student.messages.length > 0) {
+          // Use a combination of name and ID as the key
+          const studentKey = `${student.First || ''} ${student.Last || ''} (${student.studentId})`;
+          messagesData[studentKey] = student.messages;
+        }
+      });
+      
+      content = JSON.stringify(messagesData, null, 2);
+      filename = 'student-messages.json';
+      type = 'application/json';
     } else {
       alert('Unsupported export format');
       return;
@@ -147,8 +197,9 @@
       <div class="export-dropdown">
         <button class="export-btn">Export Data</button>
         <div class="export-content">
-          <button on:click={() => exportData('json')}>JSON</button>
-          <button on:click={() => exportData('csv')}>CSV</button>
+          <button on:click={() => exportData('json')}>JSON (All Data)</button>
+          <button on:click={() => exportData('csv')}>CSV (All Data)</button>
+          <button on:click={() => exportData('messages-only')}>Messages Only</button>
         </div>
       </div>
       <button on:click={clearRecords}>Clear All Records</button>
