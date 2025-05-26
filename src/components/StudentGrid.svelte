@@ -23,6 +23,21 @@
               target="_blank"
               rel="noopener">@{student.githubUsername}</a
             >
+            {#if student.githubProfile}
+              <div class="github-profile">
+                <div><strong>{student.githubProfile.name || student.githubProfile.login}</strong></div>
+                {#if student.githubProfile.bio}
+                  <div class="bio">{student.githubProfile.bio}</div>
+                {/if}
+                <div class="stats">
+                  <span><i class="repo-icon"></i>{student.githubProfile.public_repos} repos</span>
+                  <span><i class="followers-icon"></i>{student.githubProfile.followers} followers</span>
+                </div>
+                {#if student.githubProfile.location}
+                  <div><i class="location-icon"></i>{student.githubProfile.location}</div>
+                {/if}
+              </div>
+            {/if}
           </div>
         {:else}
           <div>GitHub: N/A</div>
@@ -86,5 +101,38 @@
   .overlay a {
     color: #80bdff;
     text-decoration: none;
+  }
+  .github-profile {
+    margin-top: 5px;
+    padding: 5px;
+    background: rgba(40, 40, 40, 0.7);
+    border-radius: 4px;
+    font-size: 0.8rem;
+  }
+  .github-profile .bio {
+    margin: 3px 0;
+    font-style: italic;
+    opacity: 0.9;
+  }
+  .github-profile .stats {
+    display: flex;
+    justify-content: space-between;
+    margin: 3px 0;
+  }
+  .github-profile .stats span {
+    display: flex;
+    align-items: center;
+  }
+  .repo-icon::before {
+    content: '📦';
+    margin-right: 3px;
+  }
+  .followers-icon::before {
+    content: '👥';
+    margin-right: 3px;
+  }
+  .location-icon::before {
+    content: '📍';
+    margin-right: 3px;
   }
 </style>

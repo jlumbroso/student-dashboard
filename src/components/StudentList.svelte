@@ -23,6 +23,23 @@
               target="_blank"
               rel="noopener">@{student.githubUsername}</a
             >
+            {#if student.githubProfile}
+              <div class="github-profile-info">
+                {#if student.githubProfile.name}
+                  <div><strong>{student.githubProfile.name}</strong></div>
+                {/if}
+                {#if student.githubProfile.bio}
+                  <div>{student.githubProfile.bio}</div>
+                {/if}
+                <div class="github-stats">
+                  <span>{student.githubProfile.public_repos} repos</span>
+                  <span>{student.githubProfile.followers} followers</span>
+                  {#if student.githubProfile.location}
+                    <span>{student.githubProfile.location}</span>
+                  {/if}
+                </div>
+              </div>
+            {/if}
           </div>
         {:else}
           <div>GitHub: N/A</div>
@@ -78,5 +95,21 @@
   .student-details a {
     color: #007acc;
     text-decoration: none;
+  }
+  .github-profile-info {
+    margin-top: 0.25rem;
+    margin-left: 1rem;
+    padding: 0.5rem;
+    background-color: #f8f8f8;
+    border-left: 3px solid #0366d6;
+    border-radius: 3px;
+    font-size: 0.9rem;
+  }
+  .github-stats {
+    display: flex;
+    gap: 1rem;
+    margin-top: 0.25rem;
+    color: #666;
+    font-size: 0.8rem;
   }
 </style>
