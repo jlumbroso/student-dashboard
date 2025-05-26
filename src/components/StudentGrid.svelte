@@ -58,6 +58,12 @@
         {:else}
           <div>Slack: N/A</div>
         {/if}
+        
+        {#if student.messages && student.messages.length > 0}
+          <div class="message-indicator">
+            <i class="message-icon"></i> {student.messages.length} message{student.messages.length !== 1 ? 's' : ''}
+          </div>
+        {/if}
       </div>
     </div>
   {/each}
@@ -133,6 +139,20 @@
   }
   .location-icon::before {
     content: '📍';
+    margin-right: 3px;
+  }
+  
+  .message-indicator {
+    margin-top: 0.5rem;
+    background-color: rgba(76, 175, 80, 0.7);
+    padding: 3px 6px;
+    border-radius: 4px;
+    display: inline-block;
+    font-size: 0.8rem;
+  }
+  
+  .message-icon::before {
+    content: '💬';
     margin-right: 3px;
   }
 </style>

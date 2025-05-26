@@ -231,11 +231,31 @@
               studentUpdates++;
             }
             
-            messagesByStudent.get(student.studentId).push({
-              timestamp: msg.timestamp,
-              source: fileName,
-              text: msg.text
-            });
+            // Check if this message already exists for the student to prevent duplicates
+            // First check against newly added messages
+            const existingMessages = messagesByStudent.get(student.studentId);
+            let isDuplicate = existingMessages.some(existingMsg => 
+              existingMsg.text === msg.text && existingMsg.timestamp === msg.timestamp
+            );
+            
+            // Then check against existing messages in the student record
+            if (!isDuplicate && student.messages && Array.isArray(student.messages)) {
+              isDuplicate = student.messages.some(existingMsg => 
+                existingMsg.text === msg.text && existingMsg.timestamp === msg.timestamp
+              );
+            }
+            
+            if (!isDuplicate) {
+              messagesByStudent.get(student.studentId).push({
+                timestamp: msg.timestamp,
+                date: new Date(msg.timestamp * 1000).toISOString(), // Store the date string for display
+                source: fileName,
+                text: msg.text,
+                channel: msg.channel || '' // Store the channel without a default value
+              });
+            } else {
+              log.debug(`Skipped duplicate message from '${username}'`);
+            }
             
             matchCount++;
             log.debug(`Matched message from '${username}' to student ${student.First} ${student.Last}`);
@@ -255,10 +275,28 @@
           
           // If this student has matched messages, add them
           if (student.studentId && messagesByStudent.has(student.studentId)) {
+            // Deep clone the student messages to avoid reference issues
+            const existingMessages = JSON.parse(JSON.stringify(student.messages || []));
             const newMessages = messagesByStudent.get(student.studentId);
+            
+            // Remove any existing duplicates before merging
+            const uniqueMessages = [...existingMessages];
+            
+            // Only add messages that don't already exist
+            newMessages.forEach(newMsg => {
+              const isDuplicate = uniqueMessages.some(existingMsg => 
+                existingMsg.text === newMsg.text && 
+                existingMsg.timestamp === newMsg.timestamp
+              );
+              
+              if (!isDuplicate) {
+                uniqueMessages.push(newMsg);
+              }
+            });
+            
             return {
               ...student,
-              messages: [...student.messages, ...newMessages]
+              messages: uniqueMessages
             };
           }
           
@@ -305,6 +343,27 @@
     handleMessageJson(file);
     event.target.value = "";
   }
+  
+  // Clear all messages from the roster
+  function clearMessages() {
+    if (confirm("Are you sure you want to clear all messages from all students?")) {
+      let studentsWithMessages = 0;
+      let totalMessages = 0;
+      
+      roster.update(currentRoster => {
+        return currentRoster.map(student => {
+          if (student.messages && student.messages.length > 0) {
+            studentsWithMessages++;
+            totalMessages += student.messages.length;
+            return { ...student, messages: [] };
+          }
+          return student;
+        });
+      });
+      
+      confirmationMessage = `Cleared ${totalMessages} messages from ${studentsWithMessages} students.`;
+    }
+  }
 </script>
 
 <div class="upload-section">
@@ -326,9 +385,12 @@
     <label for="slack">Slack CSV:</label>
     <input id="slack" type="file" accept=".csv" on:change={onSlackChange} />
   </div>
-  <div>
-    <label for="messages">Message JSON:</label>
-    <input id="messages" type="file" accept=".json" on:change={onMessagesChange} />
+  <div class="input-with-action">
+    <div>
+      <label for="messages">Message JSON:</label>
+      <input id="messages" type="file" accept=".json" on:change={onMessagesChange} />
+    </div>
+    <button on:click={clearMessages} class="clear-button">Clear Messages</button>
   </div>
 
   {#if loadingMessage}
@@ -368,5 +430,30 @@
   }
   .confirmation {
     color: #28a745;
+  }
+  
+  .input-with-action {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  
+  .input-with-action > div {
+    flex-grow: 1;
+  }
+  
+  .clear-button {
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 0.4rem 0.75rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+  }
+  
+  .clear-button:hover {
+    background-color: #bd2130;
   }
 </style>
