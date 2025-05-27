@@ -455,6 +455,52 @@
       content = JSON.stringify(messagesData, null, 2);
       filename = 'student-messages.json';
       type = 'application/json';
+    } else if (format === 'xm-directory') {
+      // XM Directory format requires FirstName, LastName, Email as the main fields
+      // plus optional fields that we can map from our data
+      
+      // Define the headers for the XM Directory format
+      const headers = [
+        'FirstName',
+        'LastName',
+        'Email',
+        'ExternalDataReference',
+        'Department',
+        'City',
+        'Country'
+      ];
+      
+      // Create CSV content starting with headers
+      const csvRows = [headers.join(',')];
+      
+      // Process each student
+      filteredRoster.forEach(student => {
+        // Prepare the row data with proper quoting
+        const rowData = {
+          // Required fields
+          FirstName: student.First || '',
+          LastName: student.Last || '',
+          Email: student.EmailAddress || '',
+          
+          // Optional fields (mapped from our data)
+          ExternalDataReference: student.studentId || '',
+          Department: student["Primary Major Title"] || student["Primary Major"] || '',
+          City: '', // We don't have this data, leaving empty
+          Country: '' // We don't have this data, leaving empty
+        };
+        
+        // Create the row with proper CSV formatting (quotes around strings)
+        const row = headers.map(header => {
+          const value = rowData[header];
+          return typeof value === 'string' ? `"${value.replace(/"/g, '""')}"` : value;
+        });
+        
+        csvRows.push(row.join(','));
+      });
+      
+      content = csvRows.join('\n');
+      filename = 'xm-directory-export.csv';
+      type = 'text/csv';
     } else {
       alert('Unsupported export format');
       return;
@@ -516,6 +562,7 @@
           <button on:click={() => exportData('json')}>JSON (All Data)</button>
           <button on:click={() => exportData('csv')}>CSV (All Data)</button>
           <button on:click={() => exportData('messages-only')}>Messages Only</button>
+          <button on:click={() => exportData('xm-directory')}>XM Directory Format</button>
         </div>
       </div>
       <button on:click={clearRecords}>Clear All Records</button>
